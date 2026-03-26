@@ -18,12 +18,13 @@ cp sans sandbox/sans
 git clone --depth 1 https://github.com/sans-language/sans /tmp/sans-src 2>/dev/null || true
 cp -r /tmp/sans-src/runtime sandbox/runtime
 rm -rf /tmp/sans-src
-docker build -t sans-playground sandbox/
+sudo docker build -t sans-playground sandbox/
 rm -rf sandbox/sans sandbox/runtime sans
 
 # Build the Go server
 echo "Building playground server..."
-CGO_ENABLED=1 go build -o /usr/local/bin/sans-playground .
+CGO_ENABLED=1 go build -o playground-server .
+sudo mv playground-server /usr/local/bin/sans-playground
 
 # Install configs
 sudo cp deploy/sans-playground.service /etc/systemd/system/
