@@ -46,9 +46,10 @@ func runCode(code string) RunResult {
 		"--pids-limit=64",
 		"--read-only",
 		"--tmpfs=/home/runner:size=64m",
-		"-v", codePath+":/home/runner/code.sans:ro",
+		"--tmpfs=/tmp:size=64m",
+		"-v", codePath+":/tmp/code.sans:ro",
 		imageName,
-		"sh", "-c", "sans build /home/runner/code.sans -o /home/runner/code && /home/runner/code",
+		"sh", "-c", "sans build /tmp/code.sans -o /home/runner/code && /home/runner/code",
 	)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
