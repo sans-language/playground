@@ -10,7 +10,7 @@ import (
 var db *DB
 
 func main() {
-	addr := flag.String("addr", ":8090", "listen address")
+	addr := flag.String("addr", "127.0.0.1:8090", "listen address")
 	dbPath := flag.String("db", "playground.db", "SQLite database path")
 	flag.Parse()
 
