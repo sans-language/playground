@@ -1,0 +1,5 @@
+playground-server
+*.db
+*.db-shm
+*.db-wal
+sandbox/sans
