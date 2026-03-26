@@ -14,8 +14,12 @@ sudo chown sans:sans /var/lib/sans-playground
 echo "Building Docker sandbox image..."
 curl -fsSL "https://github.com/sans-language/sans/releases/latest/download/sans-linux-x86_64.tar.gz" | tar xz
 cp sans sandbox/sans
+# Clone runtime .sans source files (compiler needs them to build user programs)
+git clone --depth 1 https://github.com/sans-language/sans /tmp/sans-src 2>/dev/null || true
+cp -r /tmp/sans-src/runtime sandbox/runtime
+rm -rf /tmp/sans-src
 docker build -t sans-playground sandbox/
-rm sandbox/sans sans
+rm -rf sandbox/sans sandbox/runtime sans
 
 # Build the Go server
 echo "Building playground server..."
