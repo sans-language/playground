@@ -23,6 +23,10 @@ const (
 )
 
 func runCode(code string) RunResult {
+	// Acquire semaphore
+	runSem <- struct{}{}
+	defer func() { <-runSem }()
+
 	tmpDir, err := os.MkdirTemp("", "sans-play-*")
 	if err != nil {
 		return RunResult{Stderr: "internal error: " + err.Error(), ExitCode: 1}

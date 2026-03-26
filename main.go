@@ -9,6 +9,8 @@ import (
 
 var db *DB
 
+var runSem = make(chan struct{}, 5)
+
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8090", "listen address")
 	dbPath := flag.String("db", "playground.db", "SQLite database path")
