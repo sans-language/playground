@@ -1,0 +1,15 @@
+[Unit]
+Description=Sans Playground Server
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=sans
+Group=sans
+ExecStart=/usr/local/bin/sans-playground -addr :8090 -db /var/lib/sans-playground/playground.db
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
