@@ -7,8 +7,29 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
+
+type limitedWriter struct {
+	buf bytes.Buffer
+	max int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	remaining := w.max - w.buf.Len()
+	if remaining <= 0 {
+		return len(p), nil // silently discard
+	}
+	if len(p) > remaining {
+		p = p[:remaining]
+	}
+	return w.buf.Write(p)
+}
+
+func (w *limitedWriter) String() string {
+	return w.buf.String()
+}
 
 type RunResult struct {
 	Stdout         string `json:"stdout"`
@@ -41,7 +62,8 @@ func runCode(code string) RunResult {
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
 
-	var stdout, stderr bytes.Buffer
+	stdout := &limitedWriter{max: 65536}
+	stderr := &limitedWriter{max: 65536}
 	cmd := exec.CommandContext(ctx, "docker", "run",
 		"--rm",
 		"--network=none",
@@ -52,8 +74,8 @@ func runCode(code string) RunResult {
 		imageName,
 		"sh", "-c", "cp /tmp/code.sans /home/runner/code.sans && sans build /home/runner/code.sans -o /home/runner/code 2>/home/runner/build.err > /dev/null; if [ -x /home/runner/code ]; then /home/runner/code; else grep 'error:' /home/runner/build.err >&2; exit 1; fi",
 	)
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
 
 	err = cmd.Run()
 
@@ -77,7 +99,7 @@ func runCode(code string) RunResult {
 		}
 	}
 
-	result.CompileSuccess = result.ExitCode == 0 || !bytes.Contains(stderr.Bytes(), []byte("error:"))
+	result.CompileSuccess = result.ExitCode == 0 || !strings.Contains(stderr.String(), "error:")
 	if result.ExitCode == 0 {
 		result.CompileSuccess = true
 	}
