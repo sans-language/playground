@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"time"
 )
 
 var db *DB
@@ -32,7 +33,14 @@ func main() {
 	handler := corsMiddleware(mux)
 
 	log.Printf("playground server listening on %s", *addr)
-	log.Fatal(http.ListenAndServe(*addr, handler))
+	srv := &http.Server{
+		Addr:         *addr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
