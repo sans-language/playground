@@ -1,9 +1,11 @@
 FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    wget gnupg ca-certificates \
-    libcurl4-openssl-dev libssl-dev zlib1g-dev \
-    llvm-17 \
+    wget gnupg ca-certificates software-properties-common \
+    libcurl4-openssl-dev libssl-dev zlib1g-dev pkg-config \
+    && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - \
+    && echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main" > /etc/apt/sources.list.d/llvm-17.list \
+    && apt-get update && apt-get install -y --no-install-recommends llvm-17 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY sans /usr/local/bin/sans
