@@ -62,10 +62,13 @@ func runCode(code string) RunResult {
 	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 	defer cancel()
 
+	containerName := fmt.Sprintf("sans-run-%d", time.Now().UnixNano())
+
 	stdout := &limitedWriter{max: 65536}
 	stderr := &limitedWriter{max: 65536}
 	cmd := exec.CommandContext(ctx, "docker", "run",
 		"--rm",
+		"--name", containerName,
 		"--network=none",
 		"--memory=256m",
 		"--cpus=1",
@@ -85,6 +88,7 @@ func runCode(code string) RunResult {
 	}
 
 	if ctx.Err() == context.DeadlineExceeded {
+		exec.Command("docker", "rm", "-f", containerName).Run()
 		result.Stderr = "execution timed out (10s limit)"
 		result.ExitCode = 124
 		result.CompileSuccess = false
