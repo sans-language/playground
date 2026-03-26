@@ -14,6 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY sans /usr/local/bin/sans
 RUN chmod +x /usr/local/bin/sans
 
+# Runtime .sans source files — the compiler needs these to build user programs
+COPY runtime/ /usr/local/lib/sans/runtime/
+
 RUN useradd -m -s /bin/bash runner
+
+# Symlink runtime so the compiler finds it from any working directory
+RUN ln -s /usr/local/lib/sans/runtime /home/runner/runtime
+
 USER runner
 WORKDIR /home/runner

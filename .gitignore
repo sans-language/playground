@@ -3,3 +3,6 @@ playground-server
 *.db-shm
 *.db-wal
 sandbox/sans
+
+# Runtime source files are copied at build time, not tracked
+sandbox/runtime/
