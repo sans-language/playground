@@ -1,0 +1,28 @@
+name: Rebuild Sandbox
+
+on:
+  repository_dispatch:
+    types: [sans-release]
+  workflow_dispatch:
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download latest Sans compiler
+        run: |
+          curl -fsSL "https://github.com/sans-language/sans/releases/latest/download/sans-linux-x86_64.tar.gz" | tar xz
+          cp sans sandbox/sans
+
+      - name: Build Docker image
+        run: docker build -t sans-playground sandbox/
+
+      - name: Smoke test
+        run: |
+          echo 'main() { p("smoke") 0 }' > /tmp/test.sans
+          docker run --rm -v /tmp/test.sans:/home/runner/code.sans:ro \
+            sans-playground sh -c "sans build /home/runner/code.sans -o /home/runner/out && /home/runner/out" \
+            | grep "smoke"
+          echo "Smoke test passed"
