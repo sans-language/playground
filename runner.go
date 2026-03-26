@@ -46,7 +46,7 @@ func runCode(code string) RunResult {
 		"--pids-limit=64",
 		"-v", codePath+":/tmp/code.sans:ro",
 		imageName,
-		"sh", "-c", "cp /tmp/code.sans /home/runner/code.sans && sans build /home/runner/code.sans -o /home/runner/code && /home/runner/code",
+		"sh", "-c", "cp /tmp/code.sans /home/runner/code.sans && sans build /home/runner/code.sans -o /home/runner/code 2>/home/runner/build.err > /dev/null; if [ -x /home/runner/code ]; then /home/runner/code; else grep 'error:' /home/runner/build.err >&2; exit 1; fi",
 	)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
