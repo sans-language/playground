@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 )
 
@@ -43,7 +43,7 @@ const (
 	imageName  = "sans-playground"
 )
 
-func runCode(code string) RunResult {
+func runCode(reqCtx context.Context, code string) RunResult {
 	// Acquire semaphore
 	runSem <- struct{}{}
 	defer func() { <-runSem }()
@@ -59,7 +59,7 @@ func runCode(code string) RunResult {
 		return RunResult{Stderr: "internal error: " + err.Error(), ExitCode: 1}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
+	ctx, cancel := context.WithTimeout(reqCtx, runTimeout)
 	defer cancel()
 
 	containerName := fmt.Sprintf("sans-run-%d", time.Now().UnixNano())
@@ -92,7 +92,11 @@ func runCode(code string) RunResult {
 	}
 
 	if ctx.Err() == context.DeadlineExceeded {
-		exec.Command("docker", "rm", "-f", containerName).Run()
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanCancel()
+		if err := exec.CommandContext(cleanCtx, "docker", "rm", "-f", containerName).Run(); err != nil {
+			log.Printf("failed to remove container %s: %v", containerName, err)
+		}
 		result.Stderr = "execution timed out (10s limit)"
 		result.ExitCode = 124
 		result.CompileSuccess = false
@@ -107,10 +111,7 @@ func runCode(code string) RunResult {
 		}
 	}
 
-	result.CompileSuccess = result.ExitCode == 0 || !strings.Contains(stderr.String(), "error:")
-	if result.ExitCode == 0 {
-		result.CompileSuccess = true
-	}
+	result.CompileSuccess = result.ExitCode == 0
 
 	return result
 }

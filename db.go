@@ -3,11 +3,15 @@ package main
 import (
 	"crypto/rand"
 	"database/sql"
+	"fmt"
+	"log"
 	"math/big"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+const maxSnippets = 100000
 
 const base62 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 
@@ -18,6 +22,11 @@ type DB struct {
 func NewDB(path string) (*DB, error) {
 	conn, err := sql.Open("sqlite3", path+"?_journal_mode=WAL")
 	if err != nil {
+		return nil, err
+	}
+	conn.SetMaxOpenConns(1)
+	conn.SetMaxIdleConns(1)
+	if err := conn.Ping(); err != nil {
 		return nil, err
 	}
 	if _, err := conn.Exec(`
@@ -55,6 +64,19 @@ func generateID() (string, error) {
 }
 
 func (db *DB) SaveSnippet(code string) (string, error) {
+	var count int
+	if err := db.conn.QueryRow("SELECT COUNT(*) FROM snippets").Scan(&count); err != nil {
+		return "", err
+	}
+	if count >= maxSnippets {
+		// Prune oldest 10% of snippets
+		if _, err := db.conn.Exec(
+			"DELETE FROM snippets WHERE id IN (SELECT id FROM snippets ORDER BY created_at ASC LIMIT ?)",
+			maxSnippets/10,
+		); err != nil {
+			return "", fmt.Errorf("failed to prune snippets: %w", err)
+		}
+	}
 	id, err := generateID()
 	if err != nil {
 		return "", err
@@ -79,8 +101,10 @@ func (db *DB) GetSnippet(id string) (string, error) {
 }
 
 func (db *DB) LogCompile(codeLength int, success bool) {
-	db.conn.Exec(
+	if _, err := db.conn.Exec(
 		"INSERT INTO compile_logs (code_length, compile_success, created_at) VALUES (?, ?, ?)",
 		codeLength, success, time.Now().Unix(),
-	)
+	); err != nil {
+		log.Printf("failed to log compile: %v", err)
+	}
 }
