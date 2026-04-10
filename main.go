@@ -5,12 +5,19 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"regexp"
+	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 var db *DB
 
-var runSem = make(chan struct{}, 5)
+var (
+	runSem     = make(chan struct{}, 5)
+	snippetRe  = regexp.MustCompile(`^[a-zA-Z0-9]{8}$`)
+)
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:8090", "listen address")
@@ -30,7 +37,7 @@ func main() {
 	mux.HandleFunc("POST /api/share", handleShare)
 	mux.HandleFunc("GET /api/snippet/{id}", handleSnippet)
 
-	handler := corsMiddleware(mux)
+	handler := corsMiddleware(rateLimitMiddleware(mux))
 
 	log.Printf("playground server listening on %s", *addr)
 	srv := &http.Server{
@@ -56,9 +63,62 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+type ipLimiter struct {
+	mu       sync.Mutex
+	limiters map[string]*rate.Limiter
+}
+
+func newIPLimiter() *ipLimiter {
+	l := &ipLimiter{limiters: make(map[string]*rate.Limiter)}
+	go l.cleanup()
+	return l
+}
+
+func (l *ipLimiter) get(ip string) *rate.Limiter {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if lim, ok := l.limiters[ip]; ok {
+		return lim
+	}
+	// 10 requests per minute, burst of 5
+	lim := rate.NewLimiter(rate.Every(6*time.Second), 5)
+	l.limiters[ip] = lim
+	return lim
+}
+
+func (l *ipLimiter) cleanup() {
+	for {
+		time.Sleep(10 * time.Minute)
+		l.mu.Lock()
+		l.limiters = make(map[string]*rate.Limiter)
+		l.mu.Unlock()
+	}
+}
+
+var limiter = newIPLimiter()
+
+func rateLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only rate limit mutation endpoints
+		if r.URL.Path == "/api/run" || r.URL.Path == "/api/share" {
+			ip := r.RemoteAddr
+			if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
+				ip = fwd
+			}
+			if !limiter.get(ip).Allow() {
+				http.Error(w, `{"error":"rate limit exceeded"}`, http.StatusTooManyRequests)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok"}); err != nil {
+		log.Printf("failed to encode health response: %v", err)
+	}
 }
 
 func handleRun(w http.ResponseWriter, r *http.Request) {
@@ -74,11 +134,13 @@ func handleRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := runCode(req.Code)
+	result := runCode(r.Context(), req.Code)
 	db.LogCompile(len(req.Code), result.CompileSuccess)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
+	if err := json.NewEncoder(w).Encode(result); err != nil {
+		log.Printf("failed to encode run response: %v", err)
+	}
 }
 
 func handleShare(w http.ResponseWriter, r *http.Request) {
@@ -100,12 +162,14 @@ func handleShare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": id})
+	if err := json.NewEncoder(w).Encode(map[string]string{"id": id}); err != nil {
+		log.Printf("failed to encode share response: %v", err)
+	}
 }
 
 func handleSnippet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	if len(id) != 8 {
+	if !snippetRe.MatchString(id) {
 		http.Error(w, `{"error":"invalid snippet id"}`, http.StatusBadRequest)
 		return
 	}
@@ -115,5 +179,7 @@ func handleSnippet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"id": id, "code": code})
+	if err := json.NewEncoder(w).Encode(map[string]string{"id": id, "code": code}); err != nil {
+		log.Printf("failed to encode snippet response: %v", err)
+	}
 }
