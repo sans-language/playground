@@ -1,5 +1,9 @@
 # Sans Playground Server
 
+> [!WARNING]
+> **Experimental — Alpha**
+> Sans is an experiment in using AI to build a language for AI. It is currently in an alpha state.
+
 API server for the [Sans language](https://sans.dev) web playground. Compiles and runs Sans code in sandboxed Docker containers.
 
 ## API Endpoints
